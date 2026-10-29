@@ -1,0 +1,1557 @@
+{
+  "name": "No-Cost AI Shorts Video Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "**Step 1: Form Input**\nCollects story topic, language, art style, number of scenes (1-12), audience, and mood.",
+        "height": 308,
+        "width": 260,
+        "color": 7
+      },
+      "id": "5c58b61e-b5c8-46d0-b29c-d81c06e05994",
+      "name": "Sticky Note10",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1952,
+        2464
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "**Step 2: Validate**\nEnsures scene count is between 1-12. Generates unique story ID.",
+        "height": 308,
+        "width": 200,
+        "color": 7
+      },
+      "id": "1352f3db-9934-461b-9fdb-683622d9aaae",
+      "name": "Sticky Note11",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1248,
+        320
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "**Step 3: Generate Story**\nGPT-4 creates complete narrative with scenes, characters, and image prompts.",
+        "height": 308,
+        "color": 7
+      },
+      "id": "6c69603f-c926-4d12-b321-ab8e88cd9149",
+      "name": "Sticky Note12",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1056,
+        320
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "**Step 4: Prepare Data**\nSanitizes text and optimizes prompts for DALL-E 3.",
+        "height": 308,
+        "width": 200,
+        "color": 7
+      },
+      "id": "4fdb41be-cc0d-4a4b-b977-c3057bef3d7a",
+      "name": "Sticky Note13",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -800,
+        320
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate input and generate story ID\nconst formData = $input.first().json;\n\n// Validate number of scenes (1-12)\nlet numScenes = parseInt(formData['Number of Scenes']) || 4;\nif (numScenes < 1) numScenes = 1;\nif (numScenes > 12) numScenes = 12;\n\n// Generate unique story ID\nconst storyId = `story_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;\n\nreturn {\n  json: {\n    ...formData,\n    numScenes: numScenes,\n    storyId: storyId\n  }\n};"
+      },
+      "id": "8efa4b40-088f-4639-bca4-cdddc06a56e1",
+      "name": "Validate Input1",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -1200,
+        464
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare story data for image generation\nconst response = $input.first().json;\nconst formData = $('Validate Input1').first().json;\nconst imageStyle = formData['Image Style'];\n\nconst story = JSON.parse(response.choices[0].message.content);\n\nfunction sanitize(text) {\n  if (!text) return '';\n  return text\n    .replace(/\\\\/g, '\\\\\\\\')\n    .replace(/\"/g, \"'\")\n    .replace(/\\n/g, ' ')\n    .replace(/\\r/g, '')\n    .replace(/\\t/g, ' ')\n    .replace(/[\\x00-\\x1F\\x7F]/g, '')\n    .trim();\n}\n\nconst preparedScenes = story.scenes.map((scene, index) => {\n  const dallePrompt = `${imageStyle}, children's book illustration: ${sanitize(scene.imagePrompt)}. High quality, vibrant colors, no text in image.`;\n  \n  return {\n    ...scene,\n    sceneIndex: index,\n    dallePrompt: dallePrompt.substring(0, 4000),\n    imageUrl: null\n  };\n});\n\nreturn {\n  json: {\n    story: { ...story, scenes: preparedScenes },\n    formData: formData,\n    storyId: formData.storyId,\n    totalScenes: preparedScenes.length,\n    createdAt: new Date().toISOString()\n  }\n};"
+      },
+      "id": "849868c6-c382-47cf-bf4f-f4f4e77c9ac9",
+      "name": "Prepare Story Data1",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -752,
+        464
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": "={{ false }}"
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -304,
+        240
+      ],
+      "id": "c7e203f0-8eec-4d93-b714-232be86c212a",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "binaryToPropery",
+        "destinationKey": "Image",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        320
+      ],
+      "id": "63a36df1-dde4-4a79-846b-b24564c33d9c",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "prompt": "={{ $json.dallePrompt }}",
+        "model": "=flux",
+        "options": {
+          "height": 1920,
+          "width": 1080
+        }
+      },
+      "type": "n8n-nodes-pollinations-ai.pollinations",
+      "typeVersion": 1,
+      "position": [
+        144,
+        240
+      ],
+      "id": "6d3ce0b9-60e9-4153-a4d8-28437c9f2f15",
+      "name": "Pollinations"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -80,
+        240
+      ],
+      "id": "0805c209-45d1-41ac-81d5-fd52e35ed979",
+      "name": "Wait1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  ...item,\n  json: {\n    ...item.json,\n    index: $itemIndex\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        48
+      ],
+      "id": "879cd9ab-5e76-4888-b45c-7c40380c4eb7",
+      "name": "Code in JavaScript7"
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "Image",
+        "binaryPropertyName": "Image",
+        "options": {
+          "fileName": "=Take_{{ $json.index }}.jpg"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        144,
+        48
+      ],
+      "id": "ec63eaa2-a66e-40d5-b8a1-c061c9798089",
+      "name": "Convert to File1"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/stories/Image/Take_{{$itemIndex}}.jpg",
+        "dataPropertyName": "Image",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        48
+      ],
+      "id": "215bca7f-f58d-4b5f-b24e-ed6dfb76e3a4",
+      "name": "Read/Write Files from Disk4"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        688,
+        336
+      ],
+      "id": "5520333e-aa1b-4653-a118-6fb329dd356b",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -80,
+        704
+      ],
+      "id": "da3e1769-7463-4ace-897c-1f5b59ce7211",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://texttospeech.googleapis.com/v1/text:synthesize",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "JSON/RAW",
+        "body": "={\n  \"input\": {\n    \"text\": {{ JSON.stringify($json.text) }}\n  },\n  \"voice\": {\n    \"languageCode\": \"en-IN\",\n    \"name\": \"en-IN-Chirp3-HD-Alnilam\",\n    \"ssmlGender\": \"MALE\"\n  },\n  \"audioConfig\": {\n    \"audioEncoding\": \"mp3\",\n    \"speakingRate\": 0.90\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        144,
+        752
+      ],
+      "id": "5bc7159f-773a-4389-b107-aed2c63de550",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const texto = item.json.output || \"\";\n\n  // If already within the limit, return as is\n  if (texto.length <= 4000) {\n    return { json: { output: texto } };\n  }\n\n  const limite = 4000;\n  const subTexto = texto.slice(0, limite);\n\n  // Find the last punctuation mark before the limit\n  const regexPontuacao = /[.!?]/g;\n  let ultimoIndice = -1;\n  let match;\n\n  while ((match = regexPontuacao.exec(subTexto)) !== null) {\n    ultimoIndice = match.index;\n  }\n\n  // Cut at the last punctuation if found, otherwise at the limit\n  const textoCortado =\n    ultimoIndice !== -1\n      ? subTexto.slice(0, ultimoIndice + 1).trim()\n      : subTexto.trim();\n\n  return { json: { output: textoCortado } };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1872,
+        2160
+      ],
+      "id": "bddb74d1-f45b-4b89-93fa-bc9881a3933b",
+      "name": "Code in JavaScript8"
+    },
+    {
+      "parameters": {
+        "jsCode": "// In JavaScript2 nodes, the current item is usually available as $json\nconst originalText = $json.output || $json.text || '';\n\n// Format the text\nconst formattedText = originalText\n  .replace(/[\\r\\n]+/g, ' ')  // Replace newlines with a single space\n  .replace(/\\s+/g, ' ')      // Collapse multiple spaces\n  .trim();                    // Remove leading/trailing spaces\n\n// Return the updated item\nreturn {\n  json: {\n    ...$json,\n    text: formattedText\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1872,
+        1200
+      ],
+      "id": "5df55983-17e3-4c2b-8c6f-13005ee26c95",
+      "name": "Code in JavaScript9"
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "audioContent",
+        "binaryPropertyName": "Audio",
+        "options": {
+          "fileName": "=Audio_{{ $itemIndex }}.mp3"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        144,
+        560
+      ],
+      "id": "2d92c51c-9254-487d-a57a-66197afab4df",
+      "name": "Convert to File2"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/stories/Audio/Audio_{{$itemIndex}}.mp3",
+        "dataPropertyName": "Audio",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        560
+      ],
+      "id": "531e8839-4fd9-479d-b28b-277e2ab48a88",
+      "name": "Read/Write Files from Disk5"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "story.scenes",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -528,
+        464
+      ],
+      "id": "ced68e9e-44f1-45c4-87fe-4a67d1efd916",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "={{ $('Validate Input1').item.json['Story Topic'] }}",
+        "regionCode": "IE",
+        "categoryId": "24",
+        "options": {
+          "defaultLanguage": "en-IN",
+          "description": "={{ $('Prepare Story Data1').item.json.story.title }},{{ $('Prepare Story Data1').item.json.story.moral }},",
+          "notifySubscribers": true,
+          "tags": "={{ $('Validate Input1').item.json['Image Style'] }}{{ $('Validate Input1').item.json['Story Mood'] }}{{ $('Validate Input1').item.json.Language }}"
+        }
+      },
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        1936,
+        320
+      ],
+      "id": "654185e9-2bee-41ab-bee9-77648f737ab1",
+      "name": "Upload a video"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Entertainment",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1251033474,
+          "mode": "list",
+          "cachedResultName": "Shorts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit#gid=REPLACE_WITH_YOUR_SHEET_TAB_ID"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Next"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1648,
+        464
+      ],
+      "id": "769edf4d-7df2-4839-a3f5-7ee2fdfea361",
+      "name": "Get row(s) in sheet"
+    },
+    {
+      "parameters": {
+        "jsCode": "// previousNodeData is the variable that holds the output from the previous node\n// Example: it could be fetched dynamically every time\n// Make sure previousNodeData is an array of objects\nconst previousNodeData = $input.all(); // or the variable storing the previous node output\n\nif (!Array.isArray(previousNodeData) || previousNodeData.length === 0) {\n  // Handle empty previous node output\n  return [];\n}\n\n// Pick a random index\nconst randomIndex = Math.floor(Math.random() * previousNodeData.length);\n\n// Get the random item\nconst randomItem = previousNodeData[randomIndex];\n\n// Wrap it in an array so downstream nodes receive an array\nreturn [randomItem];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1424,
+        464
+      ],
+      "id": "8a6da874-6a1d-4601-ac48-4b7d2dd9a202",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "Video",
+        "name": "={{ $('Prepare Story Data1').item.json.story.titleEnglish }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_DRIVE_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "AI Post Content Automation",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/REPLACE_WITH_YOUR_GOOGLE_DRIVE_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1488,
+        320
+      ],
+      "id": "ed1622f6-4ee3-48e0-9c2e-aff6386598fd",
+      "name": "Upload file"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1712,
+        320
+      ],
+      "id": "23a33b23-6ef6-45cf-868b-17bde7f95dcf",
+      "name": "Download file"
+    },
+    {
+      "parameters": {
+        "command": "=# Step 2: Create final vertical video (1080x1920)\nffmpeg -y \\\n  -stream_loop -1 -i \"/data/stories/OverlayVideo/overlayvideo.mp4\" \\\n  -i \"/data/stories/Audio/temp_audio.mp3\" \\\n  -filter_complex \"\n    [0:v]scale=1080:1920:force_original_aspect_ratio=increase,\n    crop=1080:1920:(iw-1080)/2:(ih-1920)/2,\n    zoompan=z='if(lte(zoom,1.3),zoom+0.0005,zoom-0.0005)':d=3:fps=30:s=1080x1920,\n    setpts=PTS-STARTPTS[video];\n    [1:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,\n    volume=3.0[audio]\n  \" \\\n  -map \"[video]\" -map \"[audio]\" \\\n  -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p \\\n  -c:a aac -b:a 192k \\\n  -movflags +faststart \\\n  -threads 0 \\\n  -shortest \\\n  \"/data/stories/Final_video/final_video_vertical.mp4\"\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        -624
+      ],
+      "id": "b432f21a-bd11-45bb-a737-b6c38f6addb6",
+      "name": "Execute Command"
+    },
+    {
+      "parameters": {
+        "command": "=# Step 1: Concatenate audio (no change needed)\nffmpeg -y -f concat -safe 0 \\\n  -i \"/data/stories/Audio/audios.txt\" \\\n  -c copy \\\n  \"/data/stories/Audio/temp_audio.mp3\" && \\\n\n# Step 2: Create final video\nffmpeg -y \\\n  -stream_loop -1 -i \"/data/stories/OverlayVideo/overlayvideo.mp4\" \\\n  -i \"/data/stories/Audio/temp_audio.mp3\" \\\n  -filter_complex \"\n    [0:v]scale=1920:1080:force_original_aspect_ratio=decrease,\n    pad=1920:1080:(ow-iw)/2:(oh-ih)/2,\n    zoompan=z='if(lte(zoom,1.3),zoom+0.0005,zoom-0.0005)':d=3:fps=30:s=1920x1080,\n    setpts=PTS-STARTPTS[video];\n    [1:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,\n    volume=3.0[audio]\n  \" \\\n  -map \"[video]\" -map \"[audio]\" \\\n  -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p \\\n  -c:a aac -b:a 192k \\\n  -movflags +faststart \\\n  -threads 0 \\\n  -shortest \\\n  \"/data/stories/Final_video/final_video.mp4\"\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        -400
+      ],
+      "id": "e76621cf-9852-4527-a6c3-f7ba679ef4c8",
+      "name": "Execute Command4 Horizontal working vidoe code"
+    },
+    {
+      "parameters": {
+        "command": "ffmpeg -i /data/stories/Final_video/video.mp4 -vn -acodec mp3 /data/stories/Final_video/audio.mp3"
+      },
+      "name": "Extract Audio",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        3056
+      ],
+      "id": "c864e049-c625-4663-a532-2157e03a43ca"
+    },
+    {
+      "parameters": {
+        "options": {},
+        "requestOptions": {}
+      },
+      "name": "Whisper Transcription",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        3584
+      ],
+      "id": "ef087cf8-a2ea-46cf-bee4-f9a4d93d6ab2"
+    },
+    {
+      "parameters": {
+        "command": "ffmpeg -i /data/stories/Final_video/video.mp4 \\\n-vf \"subtitles=/data/stories/Final_video/audio.srt:force_style='Fontsize=48,Outline=3,Shadow=1,Alignment=2,MarginV=200'\" \\\n-c:a copy /data/stories/Final_video/video_with_subs.mp4\n"
+      },
+      "name": "Burn Subtitles",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        1424
+      ],
+      "id": "ffbd700f-0521-4d55-a61d-f38c2873db3d"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "source": {
+          "sourceType": "binary",
+          "binaryProperty": "data"
+        },
+        "advancedOptions": {}
+      },
+      "type": "n8n-nodes-mediafx.mediaFX",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        976
+      ],
+      "id": "ae6fdef4-0916-48c3-9a71-830bb981a4ca",
+      "name": "Extract audio"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "id": "4ed8d73f-6a44-454f-a9a6-1451eebd2173",
+      "name": "Transcribe a recording",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        -1872,
+        2832
+      ],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: JSON with story.scenes array\nconst story = items[0].json.story; // your story object\n\n// Merge all scene texts\nconst mergedText = story.scenes\n  .map(scene => scene.textEnglish || scene.text || '')\n  .filter(text => text.trim() !== '')\n  .join('\\n\\n'); // separate scenes by double newline\n\n// Return merged text\nreturn [{\n  json: {\n    mergedText\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1872,
+        2384
+      ],
+      "id": "760dbc94-aa5e-40b7-9d58-1c8871716a66",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: mergedText from previous node\nconst mergedText = (items[0]?.json?.mergedText || '').trim();\n\n// Return empty if no text\nif (!mergedText) {\n  return [{\n    json: { message: 'No text to generate SRT' }\n  }];\n}\n\n// Settings\nconst minDuration = 1; // minimum seconds per line\nconst maxDuration = 3; // maximum seconds per line\nconst wordsPerSecond = 2; // approximate reading speed (words/sec)\n\n// Split mergedText into words\nconst words = mergedText.split(/\\s+/);\n\n// Function to split words into subtitle lines\nlet lines = [];\nlet lineWords = [];\nlet wordCounter = 0;\n\nfor (let i = 0; i < words.length; i++) {\n  lineWords.push(words[i]);\n  wordCounter++;\n\n  // Estimate duration for current line\n  const duration = Math.max(minDuration, Math.min(maxDuration, lineWords.length / wordsPerSecond));\n\n  // Finalize line if duration >= maxDuration OR last word\n  if (duration >= maxDuration || i === words.length - 1) {\n    lines.push({\n      text: lineWords.join(' '),\n      duration: duration\n    });\n    lineWords = [];\n  }\n}\n\n// Function to format time for SRT\nfunction formatTime(sec) {\n  const h = String(Math.floor(sec / 3600)).padStart(2, '0');\n  const m = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');\n  const s = String(Math.floor(sec % 60)).padStart(2, '0');\n  const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, '0');\n  return `${h}:${m}:${s},${ms}`;\n}\n\n// Build SRT content\nlet srtContent = '';\nlet currentTime = 0;\n\nlines.forEach((line, index) => {\n  const start = formatTime(currentTime);\n  const end = formatTime(currentTime + line.duration);\n  srtContent += `${index + 1}\\n${start} --> ${end}\\n${line.text}\\n\\n`;\n  currentTime += line.duration;\n});\n\n// Return SRT as binary for Write Binary File node\nreturn [{\n  json: {},\n  binary: {\n    srt: {\n      data: Buffer.from(srtContent, 'utf-8'),\n      mimeType: 'application/x-subrip',\n      fileName: 'story_subtitles.srt'\n    }\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1648,
+        2384
+      ],
+      "id": "7ae696ea-d7dc-41a9-8989-774c796276db",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/stories/Sub/Sub.srt",
+        "dataPropertyName": "srt",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1424,
+        2384
+      ],
+      "id": "d00fe310-569a-4d03-84f9-118bb6de017b",
+      "name": "Read/Write Files from Disk1"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/data/stories/Final_video/final_video.mp4",
+        "options": {
+          "dataPropertyName": "Video"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1872,
+        3280
+      ],
+      "name": "Read Video",
+      "id": "8c68322c-5472-47fd-a387-c9680f84ceda"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/data/stories/Sub/Sub.srt",
+        "options": {
+          "dataPropertyName": "Sub"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1648,
+        3360
+      ],
+      "name": "Read SRT",
+      "id": "806c681d-373c-4cad-87c0-4831f8966c36"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1424,
+        3280
+      ],
+      "name": "Merge Video & Sub",
+      "id": "f74fcb36-ccf1-4e0d-9228-9d74b3975219"
+    },
+    {
+      "parameters": {
+        "resource": "subtitle",
+        "operation": "addSubtitle",
+        "fontKey": "roboto",
+        "verticalAlign": "middle",
+        "paddingX": 15,
+        "paddingY": 15
+      },
+      "type": "n8n-nodes-mediafx.mediaFX",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        3808
+      ],
+      "name": "Add Subtitles",
+      "id": "b4829d26-cd01-4aa9-b250-84d7e56bedfd"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all incoming items\nconst items = $input.all();\n\n// Check that there is at least 2 items to merge\nif (items.length < 2) {\n  throw new Error(`Expected at least 2 items, got ${items.length}`);\n}\n\n// Prepare a new output item with all binary data\nconst mergedBinary = {};\n\n// Loop through each item and add its binary properties to the mergedBinary\nitems.forEach((item, index) => {\n  // Get the first binary property in this item\n  const binaryKeys = Object.keys(item.binary);\n  if (binaryKeys.length === 0) {\n    throw new Error(`Item ${index} has no binary data`);\n  }\n\n  // Use a key like data0, data1, data2, ...\n  mergedBinary[`data${index}`] = item.binary[binaryKeys[0]];\n});\n\n// Return the merged binary data\nreturn [\n  {\n    json: {},\n    binary: mergedBinary\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        3280
+      ],
+      "id": "634b8511-1b1a-4315-9d7b-e5820deab796",
+      "name": "Code in JavaScript6"
+    },
+    {
+      "parameters": {
+        "resource": "subtitle",
+        "operation": "addSubtitle",
+        "source": {
+          "source": {
+            "sourceType": "binary",
+            "binaryProperty": "data1"
+          }
+        },
+        "subtitleFileSource": {
+          "source": {
+            "sourceType": "binary",
+            "binaryProperty": "data0"
+          }
+        },
+        "outputFieldName": "=test1"
+      },
+      "type": "n8n-nodes-mediafx.mediaFX",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        3280
+      ],
+      "id": "9fbabb13-83b7-4d51-b01c-e0f973233381",
+      "name": "AddSubtitle subtitle1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1424,
+        1872
+      ],
+      "id": "f1141f5e-f2e7-4f27-9301-1d7555c3b6df",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/data/stories/Sub/Sub.srt",
+        "options": {
+          "fileName": "srt",
+          "dataPropertyName": "Sub"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1648,
+        1936
+      ],
+      "id": "4024ba58-f48a-4da1-88e6-a2f0d739d3f3",
+      "name": "Read/Write Files from Disk2"
+    },
+    {
+      "parameters": {
+        "resource": "subtitle",
+        "operation": "addSubtitle",
+        "source": {
+          "source": {
+            "sourceType": "binary",
+            "binaryProperty": "Video"
+          }
+        },
+        "subtitleFileSource": {
+          "source": {
+            "sourceType": "binary",
+            "binaryProperty": "Sub"
+          }
+        },
+        "fontKey": "roboto",
+        "verticalAlign": "middle",
+        "paddingX": 15,
+        "paddingY": 15
+      },
+      "type": "n8n-nodes-mediafx.mediaFX",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        1872
+      ],
+      "id": "de526e77-4b89-493e-8507-d8e6e9912cee",
+      "name": "AddSubtitle subtitle"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/data/stories/Final_video/final_video.mp4",
+        "options": {
+          "dataPropertyName": "Video"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1872,
+        1872
+      ],
+      "id": "b7cef450-04c9-4cd7-bebc-736fe28c3d3f",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Entertainment",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1251033474,
+          "mode": "list",
+          "cachedResultName": "Shorts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit#gid=REPLACE_WITH_YOUR_SHEET_TAB_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Story Topic": "={{ $('Validate Input1').item.json['Story Topic'] }}",
+            "Language": "={{ $('Validate Input1').item.json.Language }}",
+            "Image Style": "={{ $('Validate Input1').item.json['Image Style'] }}",
+            "Number of Scenes": "={{ $('Validate Input1').item.json['Number of Scenes'] }}",
+            "Target Audience": "={{ $('Validate Input1').item.json['Target Audience'] }}",
+            "Story Mood": "={{ $('Validate Input1').item.json['Story Mood'] }}",
+            "Status": "Done"
+          },
+          "matchingColumns": [
+            "Story Topic"
+          ],
+          "schema": [
+            {
+              "id": "Story Topic",
+              "displayName": "Story Topic",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Language",
+              "displayName": "Language",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Style",
+              "displayName": "Image Style",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Number of Scenes",
+              "displayName": "Number of Scenes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Target Audience",
+              "displayName": "Target Audience",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Story Mood",
+              "displayName": "Story Mood",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2160,
+        320
+      ],
+      "id": "087204fb-9f5c-49e9-9d04-6230c2d7b1ec",
+      "name": "Update row in sheet"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/data/stories/Final_video/final_video_vertical.mp4",
+        "options": {
+          "mimeType": "video/mp4",
+          "dataPropertyName": "Video"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1296,
+        336
+      ],
+      "id": "da03dd08-eede-467e-9c4f-93443525b47f",
+      "name": "Read/Write Files from Disk3"
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -y \\\n-framerate 1/15 \\\n-i \"/data/stories/image/Take_%d.jpg\" \\\n-stream_loop -1 -i \"/data/stories/Overlay/overlay.mov\" \\\n-filter_complex \"\n  [0:v]\n  scale=1080:1920:force_original_aspect_ratio=increase,\n  crop=1080:1920,\n  zoompan=\n      z='1+0.0008*on':\n      d=450:\n      fps=30:\n      s=1080x1920,\n  setpts=PTS-STARTPTS\n  [video];\n\n  [1:v]\n  scale=1080:1920,\n  format=rgba,\n  colorchannelmixer=aa=0.12\n  [overlay];\n\n  [video][overlay]\n  overlay=shortest=1:format=auto\n  [v]\n\" \\\n-map \"[v]\" \\\n-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p \\\n-t 600 \\\n\"/data/stories/OverlayVideo/overlayvideo.mp4\"\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        1648
+      ],
+      "id": "a30b2293-5ca9-40ef-ba1f-5fe539c066d4",
+      "name": "Execute Command1_faster working Video Genrator command"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a master storyteller creating illustrated stories. Generate engaging narratives with vivid, DALL-E-friendly image prompts. Keep prompts concise but descriptive.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Create an illustrated story:\\n\\nTOPIC: {{ $json['Story Topic'] }}\\n\\nSPECS:\\n- Language: {{ $json.Language }}\\n- Scenes: {{ $json.numScenes }}\\n- Audience: {{ $json['Target Audience'] }}\\n- Mood: {{ $json['Story Mood'] }}\\n- Art style: {{ $json['Image Style'] }}\\n\\nRULES:\\n1. Exactly {{ $json.numScenes }} scenes\\n2. Write story text in {{ $json.Language }}\\n3. Image prompts in English, include art style\\n4. Age-appropriate content\\n5. Clear beginning, middle, end\"\n    }\n  ],\n  \"response_format\": {\n    \"type\": \"json_schema\",\n    \"json_schema\": {\n      \"name\": \"illustrated_story\",\n      \"strict\": true,\n      \"schema\": {\n        \"type\": \"object\",\n        \"additionalProperties\": false,\n        \"properties\": {\n          \"title\": { \"type\": \"string\" },\n          \"titleEnglish\": { \"type\": \"string\" },\n          \"summary\": { \"type\": \"string\" },\n          \"summaryEnglish\": { \"type\": \"string\" },\n          \"language\": { \"type\": \"string\" },\n          \"targetAudience\": { \"type\": \"string\" },\n          \"mood\": { \"type\": \"string\" },\n          \"moral\": { \"type\": \"string\" },\n          \"scenes\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"object\",\n              \"additionalProperties\": false,\n              \"properties\": {\n                \"sceneNumber\": { \"type\": \"number\" },\n                \"title\": { \"type\": \"string\" },\n                \"text\": { \"type\": \"string\" },\n                \"textEnglish\": { \"type\": \"string\" },\n                \"imagePrompt\": { \"type\": \"string\" }\n              },\n              \"required\": [\"sceneNumber\", \"title\", \"text\", \"textEnglish\", \"imagePrompt\"]\n            }\n          },\n          \"characters\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"object\",\n              \"additionalProperties\": false,\n              \"properties\": {\n                \"name\": { \"type\": \"string\" },\n                \"description\": { \"type\": \"string\" },\n                \"role\": { \"type\": \"string\" }\n              },\n              \"required\": [\"name\", \"description\", \"role\"]\n            }\n          }\n        },\n        \"required\": [\"title\", \"titleEnglish\", \"summary\", \"summaryEnglish\", \"language\", \"targetAudience\", \"mood\", \"moral\", \"scenes\", \"characters\"]\n      }\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "0cf5668e-7f9f-4c27-be40-ae1915715598",
+      "name": "Generate Story (GPT-4)1_OLD",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -992,
+        448
+      ],
+      "typeVersion": 4.3
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a viral YouTube Shorts quiz creator AND infographic designer. Generate highly engaging, curiosity-driven quiz videos using clean, modern infographic-style visuals. Focus on bold typography, icons, structured layouts, and high readability. Design content to maximize retention and reveal the answer only in the final 2 seconds.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Create a quiz-style short video with INFOGRAPHIC-STYLE visuals:\\n\\nTOPIC: {{ $json['Story Topic'] }}\\n\\nSPECS:\\n- Language: {{ $json['Language'] }}\\n- Scenes: {{ $json['Number of Scenes'] }}\\n- Audience: {{ $json['Target Audience'] }}\\n- Difficulty: {{ $json['Difficulty'] }}\\n- Art style: Infographic, flat design, minimal, modern UI\\n- Mood: {{ $json['Story Mood'] }}\\n\\nRULES:\\n1. Exactly {{ $json['Number of Scenes'] }} scenes\\n2. First scene MUST be a strong hook\\n3. Middle scenes present the quiz question and options (A/B/C/D) in a structured infographic layout\\n4. Use visual hierarchy: title (top), question (center), options (stacked or grid)\\n5. Build suspense with countdown scenes showing BIG numbers in the center\\n6. DO NOT reveal the answer until the FINAL scene\\n7. Final scene must reveal the correct answer clearly using highlight, color contrast, icons, or checkmarks\\n8. Keep text short, punchy (max 10–12 words per scene)\\n9. Each imagePrompt MUST describe an infographic layout including:\\n   - text placement (top/center/grid)\\n   - icons or visual symbols\\n   - color scheme\\n   - typography (bold, modern, high contrast)\\n   - spacing and clean UI design\\n10. Image prompts must be in English\\n11. Use flat design, vector icons, minimal clutter\\n12. Ensure mobile-first vertical (9:16) layout\\n13. Add loop potential (ending connects to beginning)\\n\\nINFOGRAPHIC IMAGE STYLE GUIDE:\\n- Clean background (dark or light gradient)\\n- Bold sans-serif fonts\\n- High contrast colors (yellow, white, cyan, neon accents)\\n- Simple icons (arrows, clocks, question marks, checkmarks)\\n- Grid or card-based layout\\n- Center-focused composition\\n\\nFORMAT:\\n- Scene 1: Hook (attention-grabbing infographic)\\n- Scene 2–(n-2): Question + options (infographic layout)\\n- Scene (n-1): Countdown (3-2-1 style)\\n- Scene n: Answer reveal (highlight correct option visually)\\n\\nEXAMPLE IMAGE PROMPT FORMAT:\\n\\\"Modern infographic style, dark gradient background, bold sans-serif font, large centered text 'Your quiz text here', question at center, options in 2x2 grid below, icons next to each option, high contrast yellow and white text, clean spacing, flat vector design, mobile vertical 9:16, highly readable\\\"\"\n    }\n  ],\n  \"response_format\": {\n    \"type\": \"json_schema\",\n    \"json_schema\": {\n      \"name\": \"quiz_short_video\",\n      \"strict\": true,\n      \"schema\": {\n        \"type\": \"object\",\n        \"additionalProperties\": false,\n        \"properties\": {\n          \"title\": { \"type\": \"string\" },\n          \"titleEnglish\": { \"type\": \"string\" },\n          \"description\": { \"type\": \"string\" },\n          \"descriptionEnglish\": { \"type\": \"string\" },\n          \"language\": { \"type\": \"string\" },\n          \"targetAudience\": { \"type\": \"string\" },\n          \"difficulty\": { \"type\": \"string\" },\n          \"topic\": { \"type\": \"string\" },\n          \"scenes\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"object\",\n              \"additionalProperties\": false,\n              \"properties\": {\n                \"sceneNumber\": { \"type\": \"number\" },\n                \"type\": { \"type\": \"string\", \"enum\": [\"hook\", \"question\", \"countdown\", \"reveal\"] },\n                \"text\": { \"type\": \"string\" },\n                \"textEnglish\": { \"type\": \"string\" },\n                \"imagePrompt\": { \"type\": \"string\" },\n                \"duration\": { \"type\": \"number\" }\n              },\n              \"required\": [\"sceneNumber\", \"type\", \"text\", \"textEnglish\", \"imagePrompt\", \"duration\"]\n            }\n          },\n          \"answer\": {\n            \"type\": \"object\",\n            \"additionalProperties\": false,\n            \"properties\": {\n              \"correctOption\": { \"type\": \"string\" },\n              \"explanation\": { \"type\": \"string\" }\n            },\n            \"required\": [\"correctOption\", \"explanation\"]\n          }\n        },\n        \"required\": [\"title\", \"titleEnglish\", \"description\", \"descriptionEnglish\", \"language\", \"targetAudience\", \"difficulty\", \"topic\", \"scenes\", \"answer\"]\n      }\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "0954cadb-a313-48c5-8f36-c30e89014c6a",
+      "name": "Generate Story (GPT-4) NEW",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -960,
+        736
+      ],
+      "typeVersion": 4.3
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -y \\\n  -i /data/stories/Audio/audio_0.mp3 \\\n  -i /data/stories/Audio/audio_1.mp3 \\\n  -i /data/stories/Audio/audio_2.mp3 \\\n  -i /data/stories/Audio/audio_3.mp3 \\\n  -i /data/stories/Audio/audio_4.mp3 \\\n  -f lavfi -t 15 -i anullsrc=r=24000:cl=mono \\\n  -filter_complex \"\n    [0:a]apad=pad_dur=15,atrim=0:15[a0];\n    [1:a]apad=pad_dur=15,atrim=0:15[a1];\n    [2:a]apad=pad_dur=15,atrim=0:15[a2];\n    [3:a]apad=pad_dur=15,atrim=0:15[a3];\n    [4:a]apad=pad_dur=15,atrim=0:15[a4];\n\n    [5:a]atrim=0:15[a5];\n\n    [a0][a1][a2][a3][a4][a5]concat=n=6:v=0:a=1[outa]\n  \" \\\n  -map \"[outa]\" \\\n  -c:a libmp3lame \\\n  /data/stories/Audio/final_merged_15s.mp3"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        768
+      ],
+      "id": "1bc25709-1b0b-4c77-ac45-36d6156d96b4",
+      "name": "Execute Command7"
+    },
+    {
+      "parameters": {
+        "resource": "subtitle"
+      },
+      "type": "n8n-nodes-mediafx.mediaFX",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        896
+      ],
+      "id": "b8cda8c5-5bec-4140-ab8c-8616c16da87b",
+      "name": "AddText subtitle"
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -y \\\n  -i /data/stories/Audio/audio_0.mp3 \\\n  -i /data/stories/Audio/audio_1.mp3 \\\n  -i /data/stories/Audio/audio_2.mp3 \\\n  -filter_complex \"\n    [0:a]apad=pad_dur=15,atrim=0:15[a0];\n    [1:a]apad=pad_dur=15,atrim=0:15[a1];\n    [2:a]apad=pad_dur=15,atrim=0:15[a2];\n\n    [a0][a1][a2]concat=n=3:v=0:a=1[outa]\n  \" \\\n  -map \"[outa]\" \\\n  -c:a libmp3lame \\\n  /data/stories/Audio/final_merged_15s.mp3"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        544,
+        560
+      ],
+      "id": "0f605287-d31f-42c0-b697-6f9f39475af5",
+      "name": "Execute Command8"
+    },
+    {
+      "parameters": {
+        "command": "=# Step 1: Concatenate audio (unchanged)\nffmpeg -y -f concat -safe 0 \\\n  -i \"/data/stories/Audio/audios.txt\" \\\n  -c copy \"/data/stories/Audio/temp_audio.mp3\" && \\\n\n# Step 2: Merge video and audio with zoom\nffmpeg -y \\\n  -stream_loop -1 -i \"/data/stories/OverlayVideo/overlayvideo.mp4\" \\\n  -i \"/data/stories/Audio/temp_audio.mp3\" \\\n  -filter_complex \"\n    [0:v]\n    scale=1080:1920:force_original_aspect_ratio=decrease,\n    pad=1080:1920:(ow-iw)/2:(oh-ih)/2,\n    zoompan=z='if(lte(zoom,1.3),zoom+0.0005,zoom-0.0005)':d=450:fps=30:s=1080x1920,\n    setpts=PTS-STARTPTS[video];\n\n    [1:a]\n    aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,\n    volume=3.0[audio]\n  \" \\\n  -map \"[video]\" -map \"[audio]\" \\\n  -c:v libx264 -preset superfast -crf 20 -pix_fmt yuv420p \\\n  -c:a aac -b:a 192k \\\n  -movflags +faststart \\\n  -threads 0 \\\n  -shortest \\\n  \"/data/stories/Final_video/final_video_vertical.mp4\"\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        336
+      ],
+      "id": "1540f64c-ac94-47f4-9599-0c2c2c2507e6",
+      "name": "Execute Command5_Working Old"
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -y \\\n  -i \"/data/stories/OverlayVideo/overlayvideo.mp4\" \\\n  -stream_loop -1 -i \"/data/stories/Audio/final_merged_15s.mp3\" \\\n  -filter_complex \"\n    [0:v]setpts=PTS-STARTPTS[video];\n\n    [0:a]\n    aformat=sample_rates=48000:channel_layouts=stereo,\n    volume=0.3[bg];\n\n    [1:a]\n    aformat=sample_rates=48000:channel_layouts=stereo,\n    volume=1.5[fg];\n\n    [bg][fg]\n    amix=inputs=2:duration=first[audio]\n  \" \\\n  -map \"[video]\" -map \"[audio]\" \\\n  -c:v libx264 -preset superfast -crf 20 -pix_fmt yuv420p \\\n  -c:a aac -b:a 192k \\\n  -movflags +faststart \\\n  -shortest \\\n  \"/data/stories/Final_video/final_video_vertical.mp4\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        720
+      ],
+      "id": "02391de9-4f74-4ebd-a39a-315d28470247",
+      "name": "Execute Command5_Working Old1"
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -y \\\n-framerate 1/15 \\\n-i \"/data/stories/image/Take_%d.jpg\" \\\n-stream_loop -1 -i \"/data/stories/Overlay/overlay.mov\" \\\n-filter_complex \"\n  [0:v]\n  scale=1080:1920:force_original_aspect_ratio=increase,\n  crop=1080:1920,\n  setpts=PTS-STARTPTS\n  [video];\n\n  [1:v]\n  scale=1080:1920,\n  format=rgba,\n  colorchannelmixer=aa=0.3\n  [overlay];\n\n  [video][overlay]\n  overlay=shortest=1:format=auto\n  [v]\n\" \\\n-map \"[v]\" \\\n-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p \\\n-t 75 \\\n\"/data/stories/OverlayVideo/overlayvideo.mp4\"\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        -80
+      ],
+      "id": "6d663c77-bd7e-4dc4-b5db-b01f2108ed8c",
+      "name": "Execute Command9"
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -y \\\n-framerate 1/15 \\\n-i \"/data/stories/image/Take_%d.jpg\" \\\n-stream_loop -1 -i \"/data/stories/Overlay/overlay.mov\" \\\n-stream_loop -1 -i \"/data/stories/Overlay/overlaymusic.mp3\" \\\n-filter_complex \"\n  [0:v]setpts=PTS-STARTPTS[video];\n\n  [1:v][video]scale2ref=w=iw:h=ih[overlay][base];\n\n  [overlay]format=rgba,colorchannelmixer=aa=0.3[ov];\n\n  [base][ov]overlay=shortest=1[v];\n\n  [2:a]\n  aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,\n  volume=0.6\n  [audio]\n\" \\\n-map \"[v]\" -map \"[audio]\" \\\n-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p \\\n-c:a aac -b:a 192k \\\n-t 75 \\\n\"/data/stories/OverlayVideo/overlayvideo.mp4\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        848,
+        336
+      ],
+      "id": "a4ff863c-9153-4ac5-b885-f1266d214bb2",
+      "name": "Execute Command10"
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -y \\\n-framerate 1/15 \\\n-i \"/data/stories/image/Take_%d.jpg\" \\\n-stream_loop -1 -i \"/data/stories/Overlay/overlay.mov\" \\\n-filter_complex \"\n  [0:v]\n  scale=1080:1920:force_original_aspect_ratio=increase,\n  crop=1080:1920,\n  setpts=PTS-STARTPTS\n  [video];\n\n  [1:v]\n  scale=1080:1920,\n  format=rgba,\n  colorchannelmixer=aa=0.3\n  [overlay];\n\n  [video][overlay]\n  overlay=shortest=1:format=auto\n  [v]\n\" \\\n-map \"[v]\" \\\n-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p \\\n-t 75 \\\n\"/data/stories/OverlayVideo/overlayvideo.mp4\"\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1984,
+        736
+      ],
+      "id": "23636546-4548-4ab1-bc71-b712f38ee6df",
+      "name": "Execute Command6_Owrking Old"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 4
+            },
+            {
+              "triggerAtHour": 14
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1824,
+        448
+      ],
+      "id": "f02d8365-e2f3-4bf4-b8c0-150e16d6c49c",
+      "name": "Schedule Trigger1"
+    }
+  ],
+  "connections": {
+    "Validate Input1": {
+      "main": [
+        [
+          {
+            "node": "Generate Story (GPT-4)1_OLD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Story Data1": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pollinations": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Pollinations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript7": {
+      "main": [
+        [
+          {
+            "node": "Convert to File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File1": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk4": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Execute Command10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [
+          {
+            "node": "Convert to File2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File2": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk5": {
+      "main": [
+        [
+          {
+            "node": "Execute Command8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Validate Input1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Upload a video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command": {
+      "main": [
+        []
+      ]
+    },
+    "Execute Command4 Horizontal working vidoe code": {
+      "main": [
+        []
+      ]
+    },
+    "Extract Audio": {
+      "main": [
+        []
+      ]
+    },
+    "Whisper Transcription": {
+      "main": [
+        []
+      ]
+    },
+    "Extract audio": {
+      "main": [
+        []
+      ]
+    },
+    "Transcribe a recording": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk1": {
+      "main": [
+        []
+      ]
+    },
+    "Read Video": {
+      "main": [
+        [
+          {
+            "node": "Merge Video & Sub",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read SRT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read SRT": {
+      "main": [
+        [
+          {
+            "node": "Merge Video & Sub",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Video & Sub": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript6": {
+      "main": [
+        [
+          {
+            "node": "AddSubtitle subtitle1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "AddSubtitle subtitle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read/Write Files from Disk2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload a video": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk3": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command1_faster working Video Genrator command": {
+      "main": [
+        []
+      ]
+    },
+    "Generate Story (GPT-4)1_OLD": {
+      "main": [
+        [
+          {
+            "node": "Prepare Story Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Story (GPT-4) NEW": {
+      "main": [
+        []
+      ]
+    },
+    "Execute Command7": {
+      "main": [
+        []
+      ]
+    },
+    "Execute Command5_Working Old": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command8": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Execute Command5_Working Old1": {
+      "main": [
+        []
+      ]
+    },
+    "Execute Command6_Owrking Old": {
+      "main": [
+        []
+      ]
+    },
+    "Execute Command10": {
+      "main": [
+        [
+          {
+            "node": "Execute Command5_Working Old",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  }
+}
